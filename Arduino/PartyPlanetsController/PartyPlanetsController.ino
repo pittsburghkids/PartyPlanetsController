@@ -199,6 +199,12 @@ void loop()
         if (mainButton.fell())
         {
             Serial.println("Main button pressed");
+            MIDI.sendNoteOn(48, 127, 1);
+        }
+        else if (mainButton.rose())
+        {
+            Serial.println("Main button released");
+            MIDI.sendNoteOff(48, 0, 1);
         }
     }
 
@@ -212,7 +218,6 @@ void loop()
             Serial.println(" button pressed");
             slots[i].leds->fill_solid(CRGB::Purple);
 
-            // Joystick.button(i + 1, true);
             MIDI.sendNoteOn(60 + i, 127, 1);
         }
         else if (slots[i].button->rose())
@@ -222,7 +227,6 @@ void loop()
             Serial.println(" button released");
             slots[i].leds->fill_solid(CRGB::Gray25);
 
-            // Joystick.button(i + 1, false);
             MIDI.sendNoteOff(60 + i, 0, 1);
         }
     }
