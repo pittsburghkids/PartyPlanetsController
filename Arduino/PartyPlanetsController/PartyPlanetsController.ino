@@ -7,28 +7,27 @@
 #include "pio_encoder.h"
 
 #define SLOT_COUNT 6
-
-#define LEVER_COUNT 4
+#define LEVER_COUNT 3
 
 #define ENCODER_ONE_PIN_A 0
 #define ENCODER_ONE_PIN_B 1
+
 #define ENCODER_TWO_PIN_A 2
 #define ENCODER_TWO_PIN_B 3
+
 #define ENCODER_THREE_PIN_A 4
 #define ENCODER_THREE_PIN_B 5
-#define ENCODER_FOUR_PIN_A 6
-#define ENCODER_FOUR_PIN_B 7
 
-#define SWITCH_ONE_PIN 16
+#define SWITCH_ONE_PIN 18
 #define SWITCH_TWO_PIN 17
-#define SWITCH_THREE_PIN 18
-#define SWITCH_FOUR_PIN 19
+#define SWITCH_THREE_PIN 16
+#define SWITCH_FOUR_PIN 21
 #define SWITCH_FIVE_PIN 20
-#define SWITCH_SIX_PIN 21
+#define SWITCH_SIX_PIN 19
 
 #define BUTTON_PIN 15
 
-#define LED_DATA_PIN 28
+#define LED_DATA_PIN 22
 #define LED_BRIGHTNESS 96
 #define LED_COUNT 16 * SLOT_COUNT
 
@@ -38,19 +37,18 @@ MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI);
 CRGBArray<LED_COUNT> leds;
 
 CRGBSet segments[SLOT_COUNT] = {
-    leds(0, 15),
-    leds(16, 31),
     leds(32, 47),
-    leds(48, 63),
-    leds(64, 79),
+    leds(16, 31),
+    leds(0, 15),
     leds(80, 95),
+    leds(64, 79),
+    leds(48, 63),
 };
 
 struct Slot
 {
     Bounce2::Button *button;
     CRGBSet *leds;
-    CRGB color;
 };
 
 Bounce2::Button buttons[SLOT_COUNT];
@@ -102,28 +100,26 @@ struct Lever
 PioEncoder encoderA(ENCODER_ONE_PIN_A);
 PioEncoder encoderB(ENCODER_TWO_PIN_A);
 PioEncoder encoderC(ENCODER_THREE_PIN_A);
-PioEncoder encoderD(ENCODER_FOUR_PIN_A);
 
 Lever levers[LEVER_COUNT] = {
     {&encoderA},
     {&encoderB},
     {&encoderC},
-    {&encoderD},
 };
 
 void setup()
 {
-    Serial.begin(115200);
+    // Serial.begin(115200);
 
     // Initialize USB.
     {
 
-        String productDescriptor = "Party Planets Controller";
-        String serialDescriptor = "0000-0000-0000-0000-0000";
+        // String productDescriptor = "Party Planets Controller";
+        // String serialDescriptor = "0000-0000-0000-0000-0001";
 
-        TinyUSBDevice.setManufacturerDescriptor("Children's Museum of Pittsburgh");
-        TinyUSBDevice.setProductDescriptor(productDescriptor.c_str());
-        TinyUSBDevice.setSerialDescriptor(serialDescriptor.c_str());
+        // TinyUSBDevice.setManufacturerDescriptor("Children's Museum of Pittsburgh");
+        // TinyUSBDevice.setProductDescriptor(productDescriptor.c_str());
+        // TinyUSBDevice.setSerialDescriptor(serialDescriptor.c_str());
 
         if (!TinyUSBDevice.isInitialized())
         {
@@ -148,42 +144,44 @@ void setup()
     // Initalize levers.
     {
         levers[0].encoder->begin();
+        levers[0].encoder->flip(true);
         delay(10);
 
         levers[1].encoder->begin();
+        levers[1].encoder->flip(true);
         delay(10);
 
         levers[2].encoder->begin();
-        delay(10);
-
-        levers[3].encoder->begin();
+        levers[2].encoder->flip(true);
         delay(10);
     }
 
     mainButton.attach(BUTTON_PIN, INPUT_PULLUP);
+    p
 
-    FastLED.addLeds<WS2811, LED_DATA_PIN, GRB>(leds, LED_COUNT).setCorrection(TypicalLEDStrip);
+        FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, LED_COUNT)
+            .setCorrection(TypicalLEDStrip);
     FastLED.setBrightness(LED_BRIGHTNESS);
 
     // Initialize slots.
     {
         slots[0].button->attach(SWITCH_ONE_PIN, INPUT_PULLUP);
-        slots[0].leds->fill_solid(CRGB::Gray25);
+        slots[0].button->setPressedState(LOW);
 
         slots[1].button->attach(SWITCH_TWO_PIN, INPUT_PULLUP);
-        slots[1].leds->fill_solid(CRGB::Gray25);
+        slots[1].button->setPressedState(LOW);
 
         slots[2].button->attach(SWITCH_THREE_PIN, INPUT_PULLUP);
-        slots[2].leds->fill_solid(CRGB::Gray25);
+        slots[2].button->setPressedState(LOW);
 
         slots[3].button->attach(SWITCH_FOUR_PIN, INPUT_PULLUP);
-        slots[3].leds->fill_solid(CRGB::Gray25);
+        slots[3].button->setPressedState(LOW);
 
         slots[4].button->attach(SWITCH_FIVE_PIN, INPUT_PULLUP);
-        slots[4].leds->fill_solid(CRGB::Gray25);
+        slots[4].button->setPressedState(LOW);
 
         slots[5].button->attach(SWITCH_SIX_PIN, INPUT_PULLUP);
-        slots[5].leds->fill_solid(CRGB::Gray25);
+        slots[5].button->setPressedState(LOW);
     }
 }
 
@@ -198,12 +196,12 @@ void loop()
         mainButton.update();
         if (mainButton.fell())
         {
-            Serial.println("Main button pressed");
+            // Serial.println("Main button pressed");
             MIDI.sendNoteOn(48, 127, 1);
         }
         else if (mainButton.rose())
         {
-            Serial.println("Main button released");
+            // Serial.println("Main button released");
             MIDI.sendNoteOff(48, 0, 1);
         }
     }
@@ -213,21 +211,37 @@ void loop()
         slots[i].button->update();
         if (slots[i].button->fell())
         {
-            Serial.print("Slot ");
-            Serial.print(i);
-            Serial.println(" button pressed");
-            slots[i].leds->fill_solid(CRGB::Purple);
+            // Serial.print("Slot ");
+            // Serial.print(i);
+            // Serial.println(" button pressed");
 
             MIDI.sendNoteOn(60 + i, 127, 1);
         }
         else if (slots[i].button->rose())
         {
-            Serial.print("Slot ");
-            Serial.print(i);
-            Serial.println(" button released");
-            slots[i].leds->fill_solid(CRGB::Gray25);
+            // Serial.print("Slot ");
+            // Serial.print(i);
+            // Serial.println(" button released");
 
             MIDI.sendNoteOff(60 + i, 0, 1);
+        }
+
+        if (slots[i].button->isPressed())
+        {
+            auto &leds = *slots[i].leds;
+            uint16_t offset = (millis() / 32) % leds.size();
+
+            for (int j = 0; j < leds.size(); j++)
+            {
+                int idx = (j + offset) % leds.size();
+                float t = float(idx) / (leds.size() - 1);
+                leds[j] = CRGB::Purple;
+                leds[j].fadeToBlackBy(t * 255);
+            }
+        }
+        else
+        {
+            slots[i].leds->fill_solid(CRGB::Gray25);
         }
     }
 
@@ -235,10 +249,10 @@ void loop()
     {
         if (levers[i].update())
         {
-            Serial.print("Lever ");
-            Serial.print(i);
-            Serial.print(" value: ");
-            Serial.println(levers[i].getNoramlizedValue());
+            // Serial.print("Lever ");
+            // Serial.print(i);
+            // Serial.print(" value: ");
+            // Serial.println(levers[i].getNoramlizedValue());
 
             MIDI.sendControlChange(i, levers[i].getNoramlizedValue() * 127, 1);
         }
