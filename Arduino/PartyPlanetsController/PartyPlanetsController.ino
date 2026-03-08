@@ -1,262 +1,110 @@
+#include "Globals.h"
 
-#include <Adafruit_TinyUSB.h>
-#include <MIDI.h>
+const uint8_t boardSelectA = 0;
+const uint8_t boardSelectB = 1;
 
-#include <FastLED.h>
-#include <Bounce2.h>
-#include "pio_encoder.h"
-
-#define SLOT_COUNT 6
-#define LEVER_COUNT 3
-
-#define ENCODER_ONE_PIN_A 0
-#define ENCODER_ONE_PIN_B 1
-
-#define ENCODER_TWO_PIN_A 2
-#define ENCODER_TWO_PIN_B 3
-
-#define ENCODER_THREE_PIN_A 4
-#define ENCODER_THREE_PIN_B 5
-
-#define SWITCH_ONE_PIN 18
-#define SWITCH_TWO_PIN 17
-#define SWITCH_THREE_PIN 16
-#define SWITCH_FOUR_PIN 21
-#define SWITCH_FIVE_PIN 20
-#define SWITCH_SIX_PIN 19
-
-#define BUTTON_PIN 15
-
-#define LED_DATA_PIN 22
-#define LED_BRIGHTNESS 96
-#define LED_COUNT 16 * SLOT_COUNT
-
-Adafruit_USBD_MIDI usb_midi;
-MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, usb_midi, MIDI);
-
-CRGBArray<LED_COUNT> leds;
-
-CRGBSet segments[SLOT_COUNT] = {
-    leds(32, 47),
-    leds(16, 31),
-    leds(0, 15),
-    leds(80, 95),
-    leds(64, 79),
-    leds(48, 63),
-};
-
-struct Slot
-{
-    Bounce2::Button *button;
-    CRGBSet *leds;
-};
-
-Bounce2::Button buttons[SLOT_COUNT];
-
-Slot slots[SLOT_COUNT] = {
-    {&buttons[0], &segments[0]},
-    {&buttons[1], &segments[1]},
-    {&buttons[2], &segments[2]},
-    {&buttons[3], &segments[3]},
-    {&buttons[4], &segments[4]},
-    {&buttons[5], &segments[5]},
-};
-
-Bounce2::Button mainButton;
-
-struct Lever
-{
-    PioEncoder *encoder;
-    int max = INT_MIN;
-    int min = INT_MAX;
-    int value = 0;
-    int lastValue = 0;
-
-    bool update()
-    {
-        value = encoder->getCount();
-        if (value != lastValue)
-        {
-            lastValue = value;
-            return true;
-        }
-        return false;
-    }
-
-    float getNoramlizedValue()
-    {
-        if (value > max)
-            max = value;
-        else if (value < min)
-            min = value;
-
-        if (max == min)
-            return 0.0f;
-
-        return (float)(value - min) / (float)(max - min);
-    }
-};
-
-PioEncoder encoderA(ENCODER_ONE_PIN_A);
-PioEncoder encoderB(ENCODER_TWO_PIN_A);
-PioEncoder encoderC(ENCODER_THREE_PIN_A);
-
-Lever levers[LEVER_COUNT] = {
-    {&encoderA},
-    {&encoderB},
-    {&encoderC},
-};
+uint8_t board = 0;
 
 void setup()
 {
-    // Serial.begin(115200);
-
-    // Initialize USB.
+  // Initialize USB.
+  {
+    if (!TinyUSBDevice.isInitialized())
     {
-
-        // String productDescriptor = "Party Planets Controller";
-        // String serialDescriptor = "0000-0000-0000-0000-0001";
-
-        // TinyUSBDevice.setManufacturerDescriptor("Children's Museum of Pittsburgh");
-        // TinyUSBDevice.setProductDescriptor(productDescriptor.c_str());
-        // TinyUSBDevice.setSerialDescriptor(serialDescriptor.c_str());
-
-        if (!TinyUSBDevice.isInitialized())
-        {
-            TinyUSBDevice.begin(0);
-        }
+      TinyUSBDevice.begin(0);
     }
+  }
 
-    // Initialize MIDI.
+  // Initialize MIDI.
+  {
+    MIDI.begin(MIDI_CHANNEL_OMNI);
+
+    if (TinyUSBDevice.mounted())
     {
-        MIDI.begin(MIDI_CHANNEL_OMNI);
-
-        if (TinyUSBDevice.mounted())
-        {
-            TinyUSBDevice.detach();
-            delay(10);
-            TinyUSBDevice.attach();
-        }
-
-        // MIDI.setHandleSystemExclusive(handleSystemExclusive);
+      TinyUSBDevice.detach();
+      delay(10);
+      TinyUSBDevice.attach();
     }
+  }
 
-    // Initalize levers.
-    {
-        levers[0].encoder->begin();
-        levers[0].encoder->flip(true);
-        delay(10);
+  // Board select.
+  {
+    pinMode(boardSelectA, INPUT_PULLUP);
+    pinMode(boardSelectB, INPUT_PULLUP);
 
-        levers[1].encoder->begin();
-        levers[1].encoder->flip(true);
-        delay(10);
+    int lsb = (digitalRead(boardSelectA) == LOW) ? 1 : 0;
+    int msb = (digitalRead(boardSelectB) == LOW) ? 1 : 0;
 
-        levers[2].encoder->begin();
-        levers[2].encoder->flip(true);
-        delay(10);
-    }
+    board = (msb << 1) | lsb;
+  }
 
-    mainButton.attach(BUTTON_PIN, INPUT_PULLUP);
-    p
+  // Board setup.
+  switch (board)
+  {
+  case 0:
+    Serial.println("Board: Left");
+    setupLeft();
+    break;
+  case 1:
+    Serial.println("Board: Center");
+    setupCenter();
+    break;
+  case 2:
+    Serial.println("Board: Right");
+    setupRight();
+    break;
+  default:
+    Serial.println("Invalid board selection!");
+  }
 
-        FastLED.addLeds<WS2812B, LED_DATA_PIN, GRB>(leds, LED_COUNT)
-            .setCorrection(TypicalLEDStrip);
-    FastLED.setBrightness(LED_BRIGHTNESS);
+  // Encoders
+  for (int i = 0; i < ENCODER_COUNT; i++)
+  {
+    encoders[i].begin();
+  }
 
-    // Initialize slots.
-    {
-        slots[0].button->attach(SWITCH_ONE_PIN, INPUT_PULLUP);
-        slots[0].button->setPressedState(LOW);
-
-        slots[1].button->attach(SWITCH_TWO_PIN, INPUT_PULLUP);
-        slots[1].button->setPressedState(LOW);
-
-        slots[2].button->attach(SWITCH_THREE_PIN, INPUT_PULLUP);
-        slots[2].button->setPressedState(LOW);
-
-        slots[3].button->attach(SWITCH_FOUR_PIN, INPUT_PULLUP);
-        slots[3].button->setPressedState(LOW);
-
-        slots[4].button->attach(SWITCH_FIVE_PIN, INPUT_PULLUP);
-        slots[4].button->setPressedState(LOW);
-
-        slots[5].button->attach(SWITCH_SIX_PIN, INPUT_PULLUP);
-        slots[5].button->setPressedState(LOW);
-    }
+  // Buttons
+  for (int i = 0; i < BUTTON_COUNT; i++)
+  {
+    buttons[i].attach(SWITCH_ONE_PIN, INPUT_PULLUP);
+    buttons[i].setPressedState(LOW);
+  }
 }
 
 void loop()
 {
-    if (!TinyUSBDevice.mounted())
+  // Wait for USB.
+  if (!TinyUSBDevice.mounted())
+  {
+    return;
+  }
+
+  // Update buttons.
+  for (int i = 0; i < BUTTON_COUNT; i++)
+  {
+    buttons[i].update();
+
+    if (buttons[i].fell())
     {
-        return;
+      MIDI.sendNoteOn(60 + i, 127, board + 1);
     }
-
+    else if (buttons[i].rose())
     {
-        mainButton.update();
-        if (mainButton.fell())
-        {
-            // Serial.println("Main button pressed");
-            MIDI.sendNoteOn(48, 127, 1);
-        }
-        else if (mainButton.rose())
-        {
-            // Serial.println("Main button released");
-            MIDI.sendNoteOff(48, 0, 1);
-        }
+      MIDI.sendNoteOff(60 + i, 0, board + 1);
     }
+  }
 
-    for (int i = 0; i < SLOT_COUNT; i++)
-    {
-        slots[i].button->update();
-        if (slots[i].button->fell())
-        {
-            // Serial.print("Slot ");
-            // Serial.print(i);
-            // Serial.println(" button pressed");
-
-            MIDI.sendNoteOn(60 + i, 127, 1);
-        }
-        else if (slots[i].button->rose())
-        {
-            // Serial.print("Slot ");
-            // Serial.print(i);
-            // Serial.println(" button released");
-
-            MIDI.sendNoteOff(60 + i, 0, 1);
-        }
-
-        if (slots[i].button->isPressed())
-        {
-            auto &leds = *slots[i].leds;
-            uint16_t offset = (millis() / 32) % leds.size();
-
-            for (int j = 0; j < leds.size(); j++)
-            {
-                int idx = (j + offset) % leds.size();
-                float t = float(idx) / (leds.size() - 1);
-                leds[j] = CRGB::Purple;
-                leds[j].fadeToBlackBy(t * 255);
-            }
-        }
-        else
-        {
-            slots[i].leds->fill_solid(CRGB::Gray25);
-        }
-    }
-
-    for (int i = 0; i < LEVER_COUNT; i++)
-    {
-        if (levers[i].update())
-        {
-            // Serial.print("Lever ");
-            // Serial.print(i);
-            // Serial.print(" value: ");
-            // Serial.println(levers[i].getNoramlizedValue());
-
-            MIDI.sendControlChange(i, levers[i].getNoramlizedValue() * 127, 1);
-        }
-
-        FastLED.show();
-    }
+  // Board funtions.
+  switch (board)
+  {
+  case 0:
+    loopLeft();
+    break;
+  case 1:
+    loopCenter();
+    break;
+  case 2:
+    loopRight();
+    break;
+  }
 }
